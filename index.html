@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Soundboard de Memes 🎵😂</title>
+  <style>
+    :root {
+      --bg: #0f0f12;
+      --fg: #ffffff;
+      --muted: #9aa0a6;
+      --btn: #ff3b6b;
+      --btn-2: #ffb703;
+      --card: #17171b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      color: var(--fg); background: radial-gradient(1200px 600px at 80% -20%, #1a1a22, #0c0c10), var(--bg);
+      min-height: 100svh; display: flex; flex-direction: column; align-items: center;
+    }
+    header { text-align: center; padding: 28px 16px 8px; }
+    h1 { margin: 0; font-size: clamp(20px, 4vw, 36px); letter-spacing: 0.3px; }
+    p.desc { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+
+    .board {
+      width: min(1100px, 96vw);
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px; padding: 20px; margin: 8px auto 20px;
+    }
+    .pad {
+      position: relative; border: none; border-radius: 18px; padding: 22px 16px; cursor: pointer;
+      background: linear-gradient(160deg, var(--btn), #ff5d8a);
+      color: #fff; font-weight: 700; font-size: 16px; letter-spacing: .2px;
+      box-shadow: 0 12px 24px rgba(255, 59, 107, .25), inset 0 -4px 10px rgba(0,0,0,.25);
+      transition: transform .08s ease, box-shadow .08s ease, filter .08s ease;
+      outline: none;
+    }
+    .pad:nth-child(3n) { background: linear-gradient(160deg, #7c3aed, #a78bfa); }
+    .pad:nth-child(4n) { background: linear-gradient(160deg, var(--btn-2), #ffd166); color: #111; }
+
+    .pad:active, .pad.playing { transform: translateY(1px) scale(.98); filter: brightness(.95); box-shadow: 0 8px 16px rgba(0,0,0,.35), inset 0 -4px 10px rgba(0,0,0,.25); }
+
+    .pad .kbd {
+      position: absolute; top: 10px; right: 12px; font-size: 12px; padding: 4px 6px; border-radius: 8px;
+      background: rgba(0,0,0,.25); color: #fff; border: 1px solid rgba(255,255,255,.15);
+    }
+
+    footer { color: var(--muted); font-size: 13px; padding: 8px 16px 24px; text-align: center; }
+    .tips { background: var(--card); border: 1px solid #23232b; border-radius: 14px; padding: 10px 14px; display: inline-block; }
+
+    .topbar { position: sticky; top: 0; z-index: 5; width: 100%; backdrop-filter: blur(6px); background: rgba(15,15,18,.5); border-bottom: 1px solid rgba(255,255,255,.06); }
+    .topbar-inner { max-width: 1100px; margin: 0 auto; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; }
+    .btn-sec { appearance: none; border: 1px solid #2a2a33; background: #17171b; color: #e6e6f0; border-radius: 10px; padding: 8px 12px; cursor: pointer; font-size: 14px; }
+    .btn-sec:hover { filter: brightness(1.1); }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-inner">
+      <strong>Soundboard de Memes</strong>
+      <button id="stopAll" class="btn-sec" title="Para todos os sons (atalho: Esc)">Parar tudo (Esc)</button>
+    </div>
+  </div>
+  <header>
+    <h1>Soundboard de Memes 🎵😂</h1>
+    <p class="desc">Clique nos botões (ou use o teclado). Suba seus .mp3 na pasta <code>/sounds</code> e edite a lista no código.</p>
+  </header>
+
+  <main class="board" id="board"></main>
+
+  <footer>
+    <div class="tips">Dica: mantenha os samples curtos (2–5s) e normalize o volume para soar uniforme.</div>
+  </footer>
+
+  <script>
+    // 1) Configure seus samples aqui. Coloque os arquivos em /sounds
+    // key: tecla opcional para atalho; label: texto do botão; file: nome do mp3
+    const SAMPLES = [
+      { key: '1', label: 'Refrão',     file: 'refrao.mp3' },
+      { key: '2', label: 'Drop',       file: 'drop.mp3' },
+      { key: '3', label: 'Uuuuh',      file: 'uuuuh.mp3' },
+      { key: '4', label: 'Brega Funk', file: 'bregafunk.mp3' },
+      // Adicione mais aqui 👇
+      // { key: 'Q', label: 'Gratidão', file: 'gratidão.mp3' },
+    ];
+
+    // 2) Utilitário: cria um player por clique para permitir sobreposição
+    function playSample(src) {
+      const audio = new Audio(src);
+      audio.currentTime = 0;
+      // A reprodução só inicia após interação do usuário em iOS; aqui o clique/tecla já conta.
+      audio.play().catch(() => {/* ignorar bloqueios se houver */});
+      // Remover da memória quando terminar
+      audio.addEventListener('ended', () => audio.remove());
+      // Guardar referência para o botão Stop All
+      playing.add(audio);
+    }
+
+    const board = document.getElementById('board');
+    const playing = new Set();
+
+    // Stop All
+    function stopAll() {
+      for (const a of Array.from(playing)) {
+        a.pause();
+        a.currentTime = 0;
+        playing.delete(a);
+      }
+    }
+
+    document.getElementById('stopAll').addEventListener('click', stopAll);
+
+    // 3) Renderizar pads
+    const buttonsByKey = new Map();
+
+    SAMPLES.forEach(({ key, label, file }) => {
+      const btn = document.createElement('button');
+      btn.className = 'pad';
+      btn.innerHTML = `<span>${label}</span>` + (key ? `<span class="kbd">${key}</span>` : '');
+      btn.addEventListener('click', () => {
+        btn.classList.add('playing');
+        playSample(`sounds/${file}`);
+        setTimeout(() => btn.classList.remove('playing'), 120);
+      });
+      board.appendChild(btn);
+      if (key) buttonsByKey.set(key.toLowerCase(), btn);
+    });
+
+    // 4) Atalhos de teclado
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { stopAll(); return; }
+      const btn = buttonsByKey.get(e.key.toLowerCase());
+      if (btn) {
+        e.preventDefault();
+        btn.click();
+      }
+    });
+  </script>
+</body>
+</html>
